@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Filter,
   CheckCircle,
@@ -7,55 +7,79 @@ import {
   Clock,
   MapPin,
   Users,
+  Loader2,
+  AlertCircle,
+  Eye,
+  X,
+  Phone,
+  User,
+  Calendar,
+  Building,
+  Shield,
 } from "lucide-react";
-
-// Dummy data for height work permit requests
-const dummyRequests = [
-  {
-    id: 1,
-    permitNumber: "HTPL/HWP/001",
-    location: "Building A, Floor 5",
-    permitDate: "2025-07-01",
-    validUpto: "2025-07-02T18:00",
-    totalWorkers: 5,
-    workDescription: "Roof maintenance and HVAC installation",
-    status: "Pending",
-  },
-  {
-    id: 2,
-    permitNumber: "HTPL/HWP/002",
-    location: "Warehouse B, Section C",
-    permitDate: "2025-07-03",
-    validUpto: "2025-07-04T17:00",
-    totalWorkers: 8,
-    workDescription: "Scaffold erection for painting",
-    status: "Approved",
-  },
-  {
-    id: 3,
-    permitNumber: "HTPL/HWP/003",
-    location: "Tower C, Exterior",
-    permitDate: "2025-07-05",
-    validUpto: "2025-07-06T20:00",
-    totalWorkers: 3,
-    workDescription: "Window cleaning at height",
-    status: "Rejected",
-  },
-  {
-    id: 4,
-    permitNumber: "HTPL/HWP/004",
-    location: "Site D, Roof",
-    permitDate: "2025-07-07",
-    validUpto: "2025-07-08T16:00",
-    totalWorkers: 6,
-    workDescription: "Antenna installation",
-    status: "Pending",
-  },
-];
 
 const MyRequests = () => {
   const [statusFilter, setStatusFilter] = useState("All");
-  const [requests, setRequests] = useState(dummyRequests);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // Fetch data from API
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://localhost:4000/api/permits");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Transform API data to match component structure
+        const transformedData = data.map((permit) => ({
+          id: permit.PermitID,
+          permitNumber: permit.PermitNumber,
+          location: permit.WorkLocation,
+          permitDate: new Date(permit.PermitDate).toLocaleDateString(),
+          validUpto: permit.PermitValidUpTo,
+          totalWorkers: permit.TotalEngagedWorkers,
+          workDescription: permit.WorkDescription,
+          organization: permit.Organization,
+          supervisorName: permit.SupervisorName,
+          contactNumber: permit.ContactNumber,
+          nearestFireAlarmPoint: permit.NearestFireAlarmPoint,
+          // Since the API doesn't have status field, we'll determine it based on dates
+          status: determineStatus(permit.PermitValidUpTo),
+          createdOn: permit.Created_on,
+          updatedOn: permit.Updated_on,
+        }));
+
+        setRequests(transformedData);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
+  }, []);
+
+  // Determine status based on validity
+  const determineStatus = (validUpTo) => {
+    const now = new Date();
+    const expiryDate = new Date(validUpTo);
+
+    if (expiryDate < now) {
+      return "Expired";
+    } else {
+      return "Active";
+    }
+  };
 
   // Filter requests based on status
   const filteredRequests =
@@ -63,14 +87,61 @@ const MyRequests = () => {
       ? requests
       : requests.filter((request) => request.status === statusFilter);
 
-  // Handle status change (Approve/Reject)
-  const handleStatusChange = (id, newStatus) => {
+  // Handle view request
+  const handleViewRequest = (request) => {
+    setSelectedRequest(request);
+    setIsViewModalOpen(true);
+  };
+
+  // Close view modal
+  const closeViewModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedRequest(null);
+  };
+
+  // Handle status change (for demo purposes - you'd need an API endpoint for this)
+  const handleStatusChange = async (id, newStatus) => {
+    // This would typically make an API call to update the status
+    // For now, just updating locally
     setRequests((prev) =>
       prev.map((request) =>
         request.id === id ? { ...request, status: newStatus } : request
       )
     );
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 flex items-center space-x-4">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="text-xl text-gray-700">Loading requests...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 flex items-center space-x-4 max-w-md">
+          <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0" />
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              Error Loading Data
+            </h3>
+            <p className="text-gray-600">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -83,7 +154,8 @@ const MyRequests = () => {
                 My Requests
               </h1>
               <p className="text-gray-600">
-                Manage and review height work permit requests
+                Manage and review height work permit requests ({requests.length}{" "}
+                total)
               </p>
             </div>
           </div>
@@ -106,9 +178,8 @@ const MyRequests = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="All">All</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
+                <option value="Active">Active</option>
+                <option value="Expired">Expired</option>
               </select>
             </div>
           </div>
@@ -117,7 +188,7 @@ const MyRequests = () => {
         {/* Requests Table */}
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">
-            Permit Requests
+            Permit Requests ({filteredRequests.length})
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300">
@@ -128,6 +199,9 @@ const MyRequests = () => {
                   </th>
                   <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-800">
                     Location
+                  </th>
+                  <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-800">
+                    Organization
                   </th>
                   <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-800">
                     Permit Date
@@ -153,7 +227,7 @@ const MyRequests = () => {
                 {filteredRequests.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="8"
+                      colSpan="9"
                       className="border border-gray-300 px-4 py-3 text-center text-gray-600"
                     >
                       No requests found for the selected status.
@@ -175,6 +249,9 @@ const MyRequests = () => {
                         </span>
                       </td>
                       <td className="border border-gray-300 px-4 py-3">
+                        {request.organization}
+                      </td>
+                      <td className="border border-gray-300 px-4 py-3">
                         {request.permitDate}
                       </td>
                       <td className="border border-gray-300 px-4 py-3">
@@ -190,44 +267,32 @@ const MyRequests = () => {
                         </span>
                       </td>
                       <td className="border border-gray-300 px-4 py-3">
-                        {request.workDescription}
+                        <div
+                          className="max-w-xs truncate"
+                          title={request.workDescription}
+                        >
+                          {request.workDescription}
+                        </div>
                       </td>
                       <td className="border border-gray-300 px-4 py-3">
                         <span
                           className={`px-2 py-1 rounded-full text-sm font-medium ${
-                            request.status === "Approved"
+                            request.status === "Active"
                               ? "bg-green-100 text-green-700"
-                              : request.status === "Rejected"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
                           }`}
                         >
                           {request.status}
                         </span>
                       </td>
                       <td className="border border-gray-300 px-4 py-3">
-                        {request.status === "Pending" && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() =>
-                                handleStatusChange(request.id, "Approved")
-                              }
-                              className="flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Approve
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleStatusChange(request.id, "Rejected")
-                              }
-                              className="flex items-center px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                            >
-                              <XCircle className="w-4 h-4 mr-1" />
-                              Reject
-                            </button>
-                          </div>
-                        )}
+                        <button
+                          onClick={() => handleViewRequest(request)}
+                          className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -235,8 +300,242 @@ const MyRequests = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Additional Info Section */}
+          {filteredRequests.length > 0 && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                Summary
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600">
+                    Total Requests:
+                  </span>
+                  <span className="ml-2 text-gray-800">{requests.length}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Active:</span>
+                  <span className="ml-2 text-green-600">
+                    {requests.filter((r) => r.status === "Active").length}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Expired:</span>
+                  <span className="ml-2 text-red-600">
+                    {requests.filter((r) => r.status === "Expired").length}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* View Modal */}
+      {isViewModalOpen && selectedRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Permit Details - {selectedRequest.permitNumber}
+              </h2>
+              <button
+                onClick={closeViewModal}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                    Basic Information
+                  </h3>
+
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Permit ID:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.id}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Permit Number:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.permitNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium text-gray-600 w-28">
+                        Location:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.location}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Building className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium text-gray-600 w-28">
+                        Organization:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.organization}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Status:
+                      </span>
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          selectedRequest.status === "Active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {selectedRequest.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Date & Time Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                    <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+                    Date & Time Information
+                  </h3>
+
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Permit Date:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.permitDate}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Clock className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium text-gray-600 w-28">
+                        Valid Up To:
+                      </span>
+                      <span className="text-gray-800">
+                        {new Date(selectedRequest.validUpto).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Created On:
+                      </span>
+                      <span className="text-gray-800">
+                        {new Date(selectedRequest.createdOn).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Updated On:
+                      </span>
+                      <span className="text-gray-800">
+                        {new Date(selectedRequest.updatedOn).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                    <User className="w-5 h-5 mr-2 text-blue-600" />
+                    Contact Information
+                  </h3>
+
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-600 w-32">
+                        Supervisor:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.supervisorName}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Phone className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium text-gray-600 w-28">
+                        Contact:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.contactNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium text-gray-600 w-28">
+                        Total Workers:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.totalWorkers}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Safety Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                    <Shield className="w-5 h-5 mr-2 text-blue-600" />
+                    Safety Information
+                  </h3>
+
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                    <div>
+                      <span className="font-medium text-gray-600 block mb-2">
+                        Fire Alarm Point:
+                      </span>
+                      <span className="text-gray-800">
+                        {selectedRequest.nearestFireAlarmPoint}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Work Description */}
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                  <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                  Work Description
+                </h3>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-gray-800 leading-relaxed">
+                    {selectedRequest.workDescription}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end p-6 border-t border-gray-200">
+              <button
+                onClick={closeViewModal}
+                className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
